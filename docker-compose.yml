@@ -1,0 +1,112 @@
+version: "3.7"
+
+services:
+
+  composer:
+    container_name: composer
+    hostname: composer
+    image: composer:latest
+    volumes:
+      - ./src:/var/www/app
+      - ./storage:/mnt/laravel-docker/storage
+    working_dir: /var/www/app
+    entrypoint: ['composer']
+    networks:
+      - shared-db
+      - default
+
+  php:
+    container_name: laravel
+    hostname: laravel
+    build:
+      context: ./
+      target: laravel
+    restart: unless-stopped
+    working_dir: /var/www/app
+    depends_on:
+      - composer
+    volumes:
+      - ./src:/var/www/app
+      - ./php/dev.ini:/usr/local/etc/php/conf.d/php.ini
+      - ./storage:/mnt/laravel-docker/storage
+    networks:
+      - shared-db
+      - default
+
+  artisan:
+    container_name: artisan
+    hostname: artisan
+    build:
+      context: ./
+      target: laravel
+    volumes:
+      - ./src:/var/www/app
+      - ./storage:/mnt/laravel-docker/storage
+    working_dir: /var/www/app
+    entrypoint: ['php', '/var/www/app/artisan']
+    networks:
+      - shared-db
+      - default
+
+  nginx:
+    hostname: nginx
+    container_name: nginx
+    build:
+      context: ./
+      target: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/nginx-entrypoint.dev.sh:/usr/local/bin/nginx-entrypoint.sh
+      - ./src:/var/www/app
+      - ./storage:/mnt/laravel-docker/storage
+    restart: unless-stopped
+    networks:
+      - default
+
+  mysql:
+    hostname: mysql
+    container_name: mysql
+    build:
+      context: ./db/mysql
+    env_file:
+      - ./db/mysql/db.env
+    ports:
+      - "3306:3306"
+    expose:
+      - 3306
+    restart: unless-stopped
+    volumes:
+      - "./db/mysql/db_data:/var/lib/mysql"
+      - "./db/mysql/backups:/backups"
+      - "./db/mysql/my.dev.cnf:/etc/mysql/my.cnf"
+    networks:
+      - shared-db
+
+  redis:
+    hostname: redis
+    container_name: redis
+    build:
+      context: ./db/redis
+      dockerfile: Dockerfile
+    env_file:
+      - ./db/redis/redis.env
+    ports:
+      - "6379:6379"
+    expose:
+      - 6379
+    restart: unless-stopped
+    volumes:
+      - "./db/redis/redis.conf:/usr/local/etc/redis/redis.conf"
+    networks:
+      - shared-db
+
+networks:
+  default:
+    name: app
+    driver: bridge
+  shared-db:
+    name: shared-db
+    external: true
